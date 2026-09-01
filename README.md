@@ -4,7 +4,7 @@ The runtime-agnostic half of the site chat assistant, extracted from
 `ridasoftsolutions` so a second application can run the same assistant without
 inheriting Cloudflare.
 
-## What is in `@mfr/chat/core`
+## `@mfr/chat/core`
 
 | Area | What you get |
 | --- | --- |
@@ -101,12 +101,54 @@ and the error codes are still `turnstile_required` / `turnstile_failed`. A
 browser built against the original Cloudflare-only client works against this
 package unchanged — renaming them would have stranded every open tab.
 
-## Not extracted yet
+## `@mfr/chat/react`
 
-The browser half. `parse-stream`, the client-side session policy, and the
-`sessionStorage` helpers are all pure and will lift cleanly; the React panel
-needs its `react-router` imports and its Tailwind class vocabulary injected
-before it can run in a Next app. That is the next package, `@mfr/chat/react`.
+The browser half. The split inside it is between what is hard to get right and
+what is merely specific to one app.
+
+Hard, and therefore shared: the focus trap, Escape handling, the
+`visualViewport` sheet sizing that stops a phone keyboard shoving the close
+button off screen, the idle-session rules that decide when to re-challenge, the
+link allow-list, scroll pinning, and announcing a streamed reply once rather
+than per token.
+
+Specific, and therefore injected through `ChatUIProvider`: colours, the router,
+the icons, the challenge widget, and what a tool's action renders as.
+
+```tsx
+import { ChatUIProvider, ChatPanel, useChat, createChatStorage } from "@mfr/chat/react";
+import Link from "next/link";
+
+const storage = createChatStorage("acme:chat");
+
+<ChatUIProvider
+  config={{
+    Link: ({ to, ...rest }) => <Link href={to} {...rest} />,
+    internalPathPrefixes: ["customers", "orders"],
+    classNames: { bubbleUser: "bg-accent text-inverse" },
+    // No `challenge` — behind auth there is no captcha to run.
+  }}
+>
+  <ChatPanel copy={copy} chat={useChat({ copy, storage })} onClose={close} />
+</ChatUIProvider>
+```
+
+### Two things worth knowing
+
+**The link allow-list takes prefixes, not a pattern.** `internalPathPrefixes:
+["services", "blog"]` — the package builds the regex. Accepting a `RegExp`
+would move a security guarantee to the caller, where a plausible-looking
+pattern gets it wrong quietly. Prefixes that could widen the match are
+rejected outright.
+
+**Storage keys are namespaced by prefix.** Two apps on one origin would
+otherwise read each other's threads.
+
+### Styling
+
+`ChatClassNames` names every styled slot, and the defaults are shadcn's
+vocabulary (`bg-primary`, `text-muted-foreground`), so a shadcn app passes
+nothing. An app on a different vocabulary overrides the slots it cares about.
 
 ## Development
 

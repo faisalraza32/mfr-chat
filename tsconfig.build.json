@@ -6,5 +6,9 @@
     "rootDir": "src",
     "sourceMap": true
   },
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/react/setup-tests.ts"
+  ]
 }
