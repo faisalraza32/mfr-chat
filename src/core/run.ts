@@ -37,10 +37,21 @@ export interface RunChatTurnOptions<Ctx> {
   messagesRemaining?: number;
   emit: (event: ChatEvent) => void;
   limits?: Partial<Pick<ChatLimits, "maxToolIterations" | "wrapUpAtRemaining">>;
+  /**
+   * The steer appended to the visitor's message near the cap. Prompt content,
+   * so it belongs to the host: the default cannot name a next step, because it
+   * does not know which tools you gave the assistant.
+   */
+  wrapUpNote?: string;
   messages?: Partial<Pick<ChatMessages, "toolLoopExhausted">>;
   /** Defaults to a `console.log`. Pass a no-op to silence it. */
   logUsage?: (usage: ProviderUsage & { provider: string; model: string }) => void;
 }
+
+export const DEFAULT_WRAP_UP_NOTE =
+  "this conversation is close to its length limit. Answer normally, then " +
+  "offer a clear next step so the conversation does not simply run out. Do " +
+  "not mention the limit or quote a number of messages.";
 
 /**
  * Appends a private steer when the conversation is near its cap.
@@ -53,18 +64,14 @@ export interface RunChatTurnOptions<Ctx> {
 function withWrapUpNote(
   userMessage: string,
   messagesRemaining: number | undefined,
-  wrapUpAtRemaining: number
+  wrapUpAtRemaining: number,
+  note: string
 ): string {
   if (messagesRemaining === undefined || messagesRemaining > wrapUpAtRemaining) {
     return userMessage;
   }
 
-  return (
-    `${userMessage}\n\n[System note, not from the visitor: this conversation ` +
-    `is close to its length limit. Answer normally, then offer a clear next ` +
-    `step so the conversation does not simply run out. Do not mention the ` +
-    `limit or quote a number of messages.]`
-  );
+  return `${userMessage}\n\n[System note, not from the visitor: ${note}]`;
 }
 
 function defaultLogUsage(
@@ -94,6 +101,7 @@ export async function runChatTurn<Ctx>(
     options.limits?.wrapUpAtRemaining ?? DEFAULT_LIMITS.wrapUpAtRemaining;
   const toolLoopExhausted =
     options.messages?.toolLoopExhausted ?? DEFAULT_MESSAGES.toolLoopExhausted;
+  const wrapUpNote = options.wrapUpNote ?? DEFAULT_WRAP_UP_NOTE;
   const logUsage = options.logUsage ?? defaultLogUsage;
 
   const messages: ProviderMessage[] = [
@@ -106,7 +114,8 @@ export async function runChatTurn<Ctx>(
       content: withWrapUpNote(
         userMessage,
         options.messagesRemaining,
-        wrapUpAtRemaining
+        wrapUpAtRemaining,
+        wrapUpNote
       ),
     },
   ];

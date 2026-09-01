@@ -215,4 +215,19 @@ describe("the wrap-up steer", () => {
     // It must not leak into the cached system blocks.
     expect(JSON.stringify(captured.body.system)).not.toContain("System note");
   });
+
+  it("lets the host phrase the steer, since only it knows the next step", async () => {
+    // The default cannot name one: it does not know which tools you gave the
+    // assistant. Genericising a host's wording during a refactor silently
+    // changes what the model does, so this is pinned.
+    await run({
+      userMessage: "What next?",
+      messagesRemaining: 1,
+      wrapUpNote: "offer to book a call or take a message.",
+    });
+
+    const asJson = JSON.stringify(captured.body.messages);
+    expect(asJson).toContain("offer to book a call or take a message.");
+    expect(asJson).not.toContain("close to its length limit");
+  });
 });

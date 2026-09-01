@@ -47,6 +47,8 @@ export interface ChatHandlerDeps<Ctx> {
   toolContext: Ctx;
   guardrails: string;
   knowledge: string;
+  /** Prompt content — see `wrapUpNote` on RunChatTurnOptions. */
+  wrapUpNote?: string;
 
   /**
    * Secret for the session HMAC. Required whenever `verifyHuman` is set —
@@ -258,6 +260,7 @@ export async function handleChatRequest<Ctx>(
           provider,
           guardrails: deps.guardrails,
           knowledge: deps.knowledge,
+          wrapUpNote: deps.wrapUpNote,
           toolset: deps.toolset,
           toolContext: deps.toolContext,
           conversationId: chatRequest.conversationId,

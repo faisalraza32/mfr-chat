@@ -19,7 +19,7 @@ export * from "./session.js";
 export * from "./sse.js";
 export * from "./tools.js";
 export * from "./validate.js";
-export { runChatTurn } from "./run.js";
+export { runChatTurn, DEFAULT_WRAP_UP_NOTE } from "./run.js";
 export type { RunResult, RunChatTurnOptions } from "./run.js";
 export { handleChatRequest } from "./handler.js";
 export type { ChatHandlerDeps } from "./handler.js";
