@@ -9,6 +9,10 @@
     "./core": {
       "types": "./dist/core/index.d.ts",
       "default": "./dist/core/index.js"
+    },
+    "./metadata": {
+      "types": "./dist/core/providers/metadata.d.ts",
+      "default": "./dist/core/providers/metadata.js"
     }
   },
   "files": [
