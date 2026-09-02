@@ -23,7 +23,7 @@ import type {
   RateLimiter,
   RequestIdentity,
 } from "./ports.js";
-import type { ChatProvider } from "./providers/types.js";
+import type { ChatProvider, ProviderUsage } from "./providers/types.js";
 import { runChatTurn } from "./run.js";
 import {
   issueSessionToken,
@@ -49,6 +49,19 @@ export interface ChatHandlerDeps<Ctx> {
   knowledge: string;
   /** Prompt content — see `wrapUpNote` on RunChatTurnOptions. */
   wrapUpNote?: string;
+
+  /**
+   * Called once per model call with what it consumed.
+   *
+   * A turn that calls tools makes several, so this fires several times. Meter
+   * by summing rather than by counting calls, and schedule the write through
+   * `runInBackground` — this runs while the visitor is waiting for tokens.
+   *
+   * Defaults to a console.log. Pass a no-op to silence it.
+   */
+  logUsage?: (
+    usage: ProviderUsage & { provider: string; model: string },
+  ) => void;
 
   /**
    * Secret for the session HMAC. Required whenever `verifyHuman` is set —
@@ -261,6 +274,7 @@ export async function handleChatRequest<Ctx>(
           guardrails: deps.guardrails,
           knowledge: deps.knowledge,
           wrapUpNote: deps.wrapUpNote,
+          logUsage: deps.logUsage,
           toolset: deps.toolset,
           toolContext: deps.toolContext,
           conversationId: chatRequest.conversationId,

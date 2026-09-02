@@ -15,6 +15,7 @@ inheriting Cloudflare.
 | Validation | `parseChatRequest` — UUID conversation ids, capped message length |
 | Failures | `classifyFailure` — tells billing from auth from transient, decides what is worth an alert |
 | SSE | `encodeEvent`, `SSE_HEADERS` |
+| Usage | `logUsage` fires per model call, for metering a spend cap |
 
 ## What is deliberately not in it
 

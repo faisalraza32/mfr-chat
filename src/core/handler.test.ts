@@ -423,3 +423,70 @@ describe("when the provider fails", () => {
     expect(store.turns).toEqual([]);
   });
 });
+
+describe("usage reporting", () => {
+  it("reports every model call, so a metered host can sum them", async () => {
+    const seen: Array<{ input: number; output: number; provider: string }> = [];
+
+    // Two calls: one that asks for a tool, then one that answers. A host
+    // metering by counting turns would bill this as half what it cost.
+    let call = 0;
+    const provider: ChatProvider = {
+      id: "openai",
+      model: "test-model",
+      async streamTurn(request) {
+        call += 1;
+        if (call === 1) {
+          return {
+            text: "",
+            toolCalls: [{ id: "t1", name: "echo", input: {} }],
+            usage: { input: 8000, output: 20, cacheRead: 0, cacheWrite: 0 },
+          };
+        }
+        request.onText("done");
+        return {
+          text: "done",
+          toolCalls: [],
+          usage: { input: 8100, output: 40, cacheRead: 8000, cacheWrite: 0 },
+        };
+      },
+    };
+
+    const toolset = createToolset<null>([
+      {
+        definition: {
+          name: "echo",
+          description: "Echo.",
+          parameters: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+        run: async () => ({ content: "ok", isError: false }),
+      },
+    ]);
+
+    const response = await handleChatRequest(
+      post({ conversationId: CONVERSATION, message: "Hi" }),
+      deps({
+        provider,
+        toolset,
+        logUsage: (usage) =>
+          seen.push({
+            input: usage.input,
+            output: usage.output,
+            provider: usage.provider,
+          }),
+      })
+    );
+
+    await readEvents(response);
+
+    expect(seen).toHaveLength(2);
+    expect(seen.reduce((n, u) => n + u.input, 0)).toBe(16100);
+    expect(seen.reduce((n, u) => n + u.output, 0)).toBe(60);
+    expect(seen[0].provider).toBe("openai");
+  });
+});
