@@ -1,6 +1,6 @@
 {
   "name": "@mfr/chat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Runtime-agnostic core for a site chat assistant: provider adapters, agent loop, session tokens, validation and SSE, behind ports for storage, rate limiting and human verification.",
   "type": "module",
   "license": "UNLICENSED",

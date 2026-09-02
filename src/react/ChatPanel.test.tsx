@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { userEvent } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -48,14 +49,16 @@ function renderPanel(
     onClose = vi.fn(),
     challenge,
     renderAction,
+    Brand,
   }: {
     onClose?: () => void;
     challenge?: ChatChallenge;
     renderAction?: (action: ChatAction, message: ChatMessage) => React.ReactNode;
+    Brand?: React.ComponentType;
   } = {}
 ) {
   render(
-    <ChatUIProvider config={{ challenge, internalPathPrefixes: [] }}>
+    <ChatUIProvider config={{ challenge, internalPathPrefixes: [], Brand }}>
       <ChatPanel
         copy={COPY}
         chat={chat}
@@ -243,5 +246,40 @@ describe("tool actions", () => {
     renderPanel(chatState({ messages }), { renderAction });
 
     expect(renderAction).not.toHaveBeenCalled();
+  });
+});
+
+describe("the brand mark", () => {
+  it("is absent unless the host supplies one", () => {
+    renderPanel(chatState());
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByTestId("brand")).toBeNull();
+  });
+
+  it("renders beside the title", () => {
+    const Brand = () => <img data-testid="brand" src="/logo.svg" alt="" />;
+    renderPanel(chatState(), { Brand });
+
+    expect(screen.getByTestId("brand")).toBeInTheDocument();
+    // Still one accessible name for the dialog — a mark carrying its own alt
+    // text would have the screen reader say the brand twice.
+    expect(screen.getByRole("dialog", { name: "Ask us" })).toBeInTheDocument();
+  });
+
+  it("is a component, so it may use hooks", () => {
+    // A theme-aware logo has to read the current theme. Passing a node built
+    // once at module scope could not; this is why the slot is a component.
+    const Brand = () => {
+      const [src] = useState("/logo-dark.svg");
+      return <img data-testid="brand" src={src} alt="" />;
+    };
+
+    renderPanel(chatState(), { Brand });
+
+    expect(screen.getByTestId("brand")).toHaveAttribute(
+      "src",
+      "/logo-dark.svg"
+    );
   });
 });

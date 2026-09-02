@@ -55,7 +55,7 @@ export function ChatPanel({
   icons,
   maxLength = 2000,
 }: ChatPanelProps) {
-  const { classNames, Link, challenge, privacyHref, fullscreenQuery } =
+  const { classNames, Brand, Link, challenge, privacyHref, fullscreenQuery } =
     useChatUI();
   const {
     messages,
@@ -203,9 +203,16 @@ export function ChatPanel({
       }
     >
       <header className={classNames.header}>
-        <div className="min-w-0">
-          <p className={classNames.headerTitle}>{copy.title}</p>
-          <p className={classNames.headerSubtitle}>{copy.subtitle}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {Brand ? (
+            <span className={classNames.headerBrand}>
+              <Brand />
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <p className={classNames.headerTitle}>{copy.title}</p>
+            <p className={classNames.headerSubtitle}>{copy.subtitle}</p>
+          </div>
         </div>
         <button
           type="button"

@@ -56,6 +56,15 @@ export interface ChatChallenge {
 
 export interface ChatUIConfig {
   classNames?: Partial<ChatClassNames>;
+  /**
+   * A small square mark shown beside the panel title.
+   *
+   * A component rather than a node so it can use hooks — a theme-aware logo
+   * has to read the current theme, and a node built once at module scope
+   * cannot. Give it `alt=""` if the title beside it already names you;
+   * otherwise a screen reader says the brand twice.
+   */
+  Brand?: ComponentType;
   /** Your router's link component, adapted to ChatLinkProps. */
   Link?: ComponentType<ChatLinkProps>;
   /**
@@ -73,6 +82,7 @@ export interface ChatUIConfig {
 
 export interface ResolvedChatUI {
   classNames: ChatClassNames;
+  Brand?: ComponentType;
   Link: ComponentType<ChatLinkProps>;
   linkPattern: RegExp;
   challenge?: ChatChallenge;
@@ -91,6 +101,7 @@ export function ChatUIProvider({
 }) {
   const value: ResolvedChatUI = {
     classNames: resolveClassNames(config.classNames),
+    Brand: config.Brand,
     Link: config.Link ?? FallbackLink,
     linkPattern: buildLinkPattern(config.internalPathPrefixes ?? []),
     challenge: config.challenge,

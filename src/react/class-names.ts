@@ -12,6 +12,7 @@
 export interface ChatClassNames {
   panel: string;
   header: string;
+  headerBrand: string;
   headerTitle: string;
   headerSubtitle: string;
   closeButton: string;
@@ -41,6 +42,8 @@ export const defaultChatClassNames: ChatClassNames = {
     "motion-safe:animate-fade-up",
   header:
     "flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3",
+  // shrink-0 so a long title squeezes the text, never the mark.
+  headerBrand: "h-8 w-8 shrink-0",
   headerTitle: "truncate text-sm font-semibold",
   headerSubtitle: "truncate text-xs text-muted-foreground",
   closeButton:

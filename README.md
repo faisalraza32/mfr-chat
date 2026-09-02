@@ -144,6 +144,19 @@ rejected outright.
 **Storage keys are namespaced by prefix.** Two apps on one origin would
 otherwise read each other's threads.
 
+### Branding
+
+`Brand` puts a small square mark beside the panel title. It is a component,
+not a node, so it can use hooks — a theme-aware logo has to read the current
+theme, and a node built once at module scope cannot.
+
+```tsx
+<ChatUIProvider config={{ Brand: () => <img src={useLogoUrl()} alt="" /> }}>
+```
+
+Give it `alt=""`: the title next to it already names you, and a mark with its
+own alt text makes a screen reader say the brand twice.
+
 ### Styling
 
 `ChatClassNames` names every styled slot, and the defaults are shadcn's
