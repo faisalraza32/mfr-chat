@@ -1,174 +1,249 @@
 # @mfr/chat
 
-The runtime-agnostic half of the site chat assistant, extracted from
-`ridasoftsolutions` so a second application can run the same assistant without
-inheriting Cloudflare.
+A chat assistant you can put on a website, split so that the parts worth
+sharing are shared and the parts that are yours stay yours.
 
-## `@mfr/chat/core`
+It runs today on two things that have almost nothing in common: a public
+marketing site on Cloudflare Workers with D1 and a Turnstile captcha, and a
+signed-in multi-tenant CRM on Next.js with Postgres and no captcha at all.
+Neither knows about the other, and the package contains no trace of either.
 
-| Area | What you get |
-| --- | --- |
-| Providers | Anthropic, OpenAI, xAI and DeepSeek behind one `ChatProvider` interface, including the Anthropic cache breakpoint and the OpenAI streaming tool-call reassembly |
-| Agent loop | `runChatTurn` — streams text, runs tools, bounded iterations, near-the-cap wrap-up steer |
-| Handler | `handleChatRequest(request, deps)` — a `Request` in, a streaming SSE `Response` out |
-| Sessions | HMAC tokens over Web Crypto: issue, verify, slide-before-expiry |
-| Validation | `parseChatRequest` — UUID conversation ids, capped message length |
-| Failures | `classifyFailure` — tells billing from auth from transient, decides what is worth an alert |
-| SSE | `encodeEvent`, `SSE_HEADERS` |
-| Usage | `logUsage` fires per model call, for metering a spend cap |
-
-## What is deliberately not in it
-
-No database, no bot check, no email, no prompt, no tools, no UI. Those differ
-between a public marketing site and an authenticated application, so they
-arrive through ports:
-
-| Port | Required | Purpose |
-| --- | --- | --- |
-| `ChatStore` | yes | Conversation state, history, persistence |
-| `ChatToolset` | yes (may be empty) | The tools the assistant can call |
-| `HumanVerifier` | no | Omit to skip the challenge and the session token entirely |
-| `RateLimiter` | no | Per-IP throttling |
-| `BackgroundTask` | no | `ctx.waitUntil` / `after()` |
-| `FailureReporter` | no | Where operator alerts go |
-
-### The one rule every `ChatStore` must keep
-
-History lives in the store, never in the client payload. If the browser sent
-the transcript back on each turn, anyone could post a fabricated 500k-token
-conversation and bill you for it. The client sends only a conversation id.
-
-## Wiring it up — Cloudflare Worker
-
-```ts
-import { createProvider, handleChatRequest } from "@mfr/chat/core";
-
-export async function handleChatPost(
-  request: Request,
-  env: CloudflareEnv,
-  ctx: ExecutionContext
-) {
-  return handleChatRequest(request, {
-    provider: () =>
-      createProvider({ id: "openai", apiKey: env.OPENAI_API_KEY }),
-    store: createD1Store(env.DB),
-    toolset: siteToolset,
-    toolContext: { env },
-    guardrails: GUARDRAILS,
-    knowledge: KNOWLEDGE_BLOCK,
-    sessionSecret: env.CHAT_SESSION_SECRET,
-    verifyHuman: (token, ip) =>
-      verifyTurnstileToken(token, env.TURNSTILE_SECRET_KEY, ip),
-    rateLimiter: { isLimited: (key) => isRateLimited(env, key) },
-    runInBackground: (work) => ctx.waitUntil(work),
-    reportFailure: (failure) => ctx.waitUntil(recordChatFailure(env, failure)),
-    preflight: () => findMissingSecret(env),
-    messages: { genericFailure: `Something went wrong. Email ${INBOX}.` },
-  });
-}
+```
+@mfr/chat/core      the server half — providers, agent loop, sessions, SSE
+@mfr/chat/react     the browser half — the panel, the hook, the storage rules
+@mfr/chat/metadata  provider names and regions, carrying no SDK
 ```
 
-## Wiring it up — Next.js route handler
+---
 
-Behind authentication there is no challenge to run, so `verifyHuman` and
-`sessionSecret` come off and the session token disappears with them.
+## The idea
+
+Two questions decide where a piece of this belongs.
+
+**Is it hard to get right?** The focus trap. The `visualViewport` sizing that
+stops a phone keyboard shoving the close button off screen. Deciding when a
+returning visitor needs challenging again. Reassembling tool calls from a
+stream. Keeping the cached prompt prefix byte-identical so the provider's cache
+actually hits. All shared.
+
+**Is it about your business?** The prompt. The tools. The colours, the router,
+the icons, the captcha, what a booking button does. All yours, and all injected.
+
+Everything the core cannot do by itself arrives as a **port** — a small
+interface you implement. That is what lets one package serve a marketing site
+and an internal application without either compromising.
+
+---
+
+## Installing
+
+Published as a git dependency, so no registry is needed:
+
+```bash
+npm  install "@mfr/chat@git+ssh://git@github.com/faisalraza32/mfr-chat.git#v0.3.0"
+pnpm add     "@mfr/chat@git+ssh://git@github.com/faisalraza32/mfr-chat.git#v0.3.0"
+```
+
+`dist/` is not committed; `prepare` builds on install. With pnpm that needs one
+line in `pnpm-workspace.yaml`, because it blocks lifecycle scripts by default:
+
+```yaml
+allowBuilds:
+  "@mfr/chat": true
+```
+
+**Bumping the tag in `package.json` is not enough.** Both lockfiles pin the
+resolved commit, so changing `#v0.3.0` to `#v0.4.0` and running install gives
+you the old code. Install the new spec explicitly.
+
+React 18 or 19, as a peer. The core needs no React at all.
+
+---
+
+## The server half
+
+One function turns a `Request` into a streaming `Response`. Both Cloudflare
+Workers and Next route handlers speak the Fetch API, so the signature is the
+same in either.
 
 ```ts
-// app/api/chat/route.ts
-import { after } from "next/server";
 import { createProvider, handleChatRequest } from "@mfr/chat/core";
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-
   return handleChatRequest(request, {
-    provider: () =>
-      createProvider({ id: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY! }),
-    store: createPrismaStore(prisma, user.workspaceId),
-    toolset: crmToolset,
-    toolContext: { prisma, user },
-    guardrails: CRM_GUARDRAILS,
-    knowledge: await buildWorkspaceKnowledge(user.workspaceId),
-    runInBackground: (work) => after(work),
-    limits: { maxMessagesPerConversation: 100 },
+    provider: () => createProvider({ id: "openai", apiKey: process.env.OPENAI_API_KEY! }),
+    store: myStore,
+    toolset: myTools,
+    toolContext: { db },
+    guardrails: GUARDRAILS,
+    knowledge: KNOWLEDGE,
   });
 }
 ```
 
-## Wire compatibility
+That is the whole required surface. Everything else is optional.
 
-The request field is `challengeToken`, but `turnstileToken` is still accepted,
-and the error codes are still `turnstile_required` / `turnstile_failed`. A
-browser built against the original Cloudflare-only client works against this
-package unchanged — renaming them would have stranded every open tab.
+### The ports
 
-## `@mfr/chat/react`
+| Port | Required | What it is |
+|---|---|---|
+| `ChatStore` | yes | Conversation state, history, persistence |
+| `ChatToolset` | yes — may be empty | What the assistant can call |
+| `HumanVerifier` | no | A captcha. **Omit it and the challenge and session token disappear entirely** |
+| `RateLimiter` | no | Per-IP throttling |
+| `BackgroundTask` | no | `ctx.waitUntil` / `after()` |
+| `FailureReporter` | no | Where operator alerts go |
+| `logUsage` | no | Fires per model call, for metering a spend cap |
 
-The browser half. The split inside it is between what is hard to get right and
-what is merely specific to one app.
+`HumanVerifier` being optional rather than stubbed is the one to notice. A
+captcha in front of somebody who has already signed in is asking them to prove
+it twice, so an authenticated app passes nothing and the whole challenge
+mechanism is simply not there.
 
-Hard, and therefore shared: the focus trap, Escape handling, the
-`visualViewport` sheet sizing that stops a phone keyboard shoving the close
-button off screen, the idle-session rules that decide when to re-challenge, the
-link allow-list, scroll pinning, and announcing a streamed reply once rather
-than per token.
+### The one rule every `ChatStore` must keep
 
-Specific, and therefore injected through `ChatUIProvider`: colours, the router,
-the icons, the challenge widget, and what a tool's action renders as.
+History lives in the store, never in the request body. If the browser sent the
+transcript back each turn, anyone could post a fabricated 500k-token
+conversation and bill you for it. The client sends only a conversation id.
+
+### Conversation ids, and when they are dangerous
+
+The browser generates the id. On an anonymous site that is harmless — the only
+thread a visitor's id can name is their own.
+
+**In an application where people share a workspace it is not.** A colleague can
+send somebody else's id and append to their thread. If your store is for
+signed-in users, scope the id rather than trusting it: make it unique per
+(tenant, user) and never look it up alone. The CRM does this, and enforces it
+in row-level security as well as in code.
+
+### Providers
+
+Anthropic, OpenAI, xAI and DeepSeek behind one interface. Switching is a config
+change, not a code change.
+
+```ts
+createProvider({ id: "anthropic", apiKey, model: "claude-opus-5", workspaceId })
+```
+
+`@mfr/chat/metadata` carries the display names and processing regions with **no
+SDK attached**, so a privacy page can name its processor without pulling two
+model SDKs into the browser bundle. Use it, not the barrel, in client code.
+
+### Prompt caching is the main cost lever
+
+`guardrails` and `knowledge` are separate because the cache breakpoint goes
+between them: knowledge is large and static, everything volatile sits after it.
+Get this wrong and every message silently costs several times more while
+looking perfectly fine. There is a test asserting no volatile content lands in
+the cached prefix; keep it.
+
+---
+
+## The browser half
 
 ```tsx
-import { ChatUIProvider, ChatPanel, useChat, createChatStorage } from "@mfr/chat/react";
-import Link from "next/link";
+import {
+  ChatUIProvider, ChatLauncher, ChatPanel, useChat, createChatStorage,
+} from "@mfr/chat/react";
 
 const storage = createChatStorage("acme:chat");
 
-<ChatUIProvider
-  config={{
-    Link: ({ to, ...rest }) => <Link href={to} {...rest} />,
-    internalPathPrefixes: ["customers", "orders"],
-    classNames: { bubbleUser: "bg-accent text-inverse" },
-    // No `challenge` — behind auth there is no captcha to run.
-  }}
->
-  <ChatPanel copy={copy} chat={useChat({ copy, storage })} onClose={close} />
+<ChatUIProvider config={{
+  Link: ({ to, ...rest }) => <Link href={to} {...rest} />,
+  internalPathPrefixes: ["products", "support"],
+  classNames: { bubbleUser: "bg-accent text-inverse" },
+  Brand: () => <Logo className="h-full w-full" />,
+}}>
+  <ChatLauncher storage={storage} renderPanel={({ onClose }) => <MyPanel onClose={onClose} />} … />
 </ChatUIProvider>
 ```
 
-### Two things worth knowing
+### What you inject, and why
 
-**The link allow-list takes prefixes, not a pattern.** `internalPathPrefixes:
-["services", "blog"]` — the package builds the regex. Accepting a `RegExp`
-would move a security guarantee to the caller, where a plausible-looking
-pattern gets it wrong quietly. Prefixes that could widen the match are
-rejected outright.
+| | |
+|---|---|
+| `Link` | The package cannot pick react-router or `next/link` without excluding the other |
+| `internalPathPrefixes` | **Security.** See below |
+| `classNames` | Defaults are shadcn's vocabulary; override the slots your design system names differently |
+| `Brand` | A component, not a node, so a theme-aware logo can call a hook |
+| `challenge` | Omit for an authenticated app |
 
-**Storage keys are namespaced by prefix.** Two apps on one origin would
-otherwise read each other's threads.
+### The link allow-list takes prefixes, never a pattern
 
-### Branding
+This is what stands between model output and a router navigation. You name path
+prefixes and the package builds the regex; prefixes that could widen the match
+are rejected. Handing over a `RegExp` would move the guarantee to the caller,
+where a plausible-looking mistake is silent — a stray `.*` is an off-site
+redirect the assistant can be talked into emitting.
 
-`Brand` puts a small square mark beside the panel title. It is a component,
-not a node, so it can use hooks — a theme-aware logo has to read the current
-theme, and a node built once at module scope cannot.
+### Storage
 
-```tsx
-<ChatUIProvider config={{ Brand: () => <img src={useLogoUrl()} alt="" /> }}>
+`createChatStorage(prefix)` namespaces `sessionStorage`, because two apps on one
+origin would otherwise read each other's threads. sessionStorage rather than
+local: a conversation belongs to the tab it started in.
+
+---
+
+## Three things that will bite you
+
+**Tailwind will not see the panel's classes.** They live in the package, and
+Tailwind only scans what you tell it to. The build succeeds, every test passes,
+and the panel renders completely unstyled.
+
+```js
+// Tailwind 3 — tailwind.config
+content: [..., "./node_modules/@mfr/chat/dist/react/**/*.js"]
+```
+```css
+/* Tailwind 4 — globals.css */
+@source "../node_modules/@mfr/chat/dist/react/**/*.js";
 ```
 
-Give it `alt=""`: the title next to it already names you, and a mark with its
-own alt text makes a screen reader say the brand twice.
+**React can resolve twice.** Installed from a tag it will not — devDeps are
+pruned, so the package carries no React of its own. `npm link` it to work on the
+package and it does, and the second copy has a null hook dispatcher that fails
+every render. `resolve.dedupe: ["react", "react-dom"]` in Vite, or the
+equivalent, costs nothing and saves a confusing afternoon.
 
-### Styling
+**Next needs the client boundary.** The components ship `"use client"`
+directives already; you do not need to add them, but do not strip them.
 
-`ChatClassNames` names every styled slot, and the defaults are shadcn's
-vocabulary (`bg-primary`, `text-muted-foreground`), so a shadcn app passes
-nothing. An app on a different vocabulary overrides the slots it cares about.
+---
+
+## Wire compatibility
+
+The request field is `challengeToken`, and `turnstileToken` is still accepted.
+The error codes are still `turnstile_required` and `turnstile_failed` even where
+no Turnstile exists. Renaming them would strand every browser tab already open
+against an older client, which is a poor trade for tidiness.
+
+---
+
+## Two worked examples
+
+**A public marketing site** (`ridasoftsolutions`) — Cloudflare Workers, D1 for
+the store, Turnstile as the `HumanVerifier`, `ctx.waitUntil` as the
+`BackgroundTask`, a rate-limit binding, and two tools: show a booking button,
+send a message to the team. shadcn class names, so it overrides almost nothing.
+
+**A signed-in multi-tenant CRM** (`cms-vb/crm`) — Next.js route handler,
+Postgres through Prisma with row-level security, **no `HumanVerifier`**,
+`after()` for background work, a monthly token budget metered through
+`logUsage`, and tools that count and link but never read a customer record out.
+Its own design tokens, so it overrides every class name. See
+`docs/assistant.md` there.
+
+---
 
 ## Development
 
 ```bash
 npm install
-npm test
+npm test        # 135 tests, core on node and react on jsdom
 npm run typecheck
 npm run build
 ```
+
+Releasing is a tag: bump `version`, commit, `git tag -a vX.Y.Z`, push with
+`--tags`, then install the new spec in each consumer.
