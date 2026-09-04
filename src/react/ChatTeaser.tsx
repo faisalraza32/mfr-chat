@@ -44,46 +44,32 @@ export function ChatTeaser({
 }: ChatTeaserProps) {
   const { classNames, Brand } = useChatUI();
   const [shown, setShown] = useState(false);
-  const [settled, setSettled] = useState(false);
-  // Read once rather than watched: this decides how one element arrives, and
-  // somebody changing the setting mid-animation is not a case worth a listener.
-  const [still] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
 
   useEffect(() => {
     const appear = window.setTimeout(() => setShown(true), delayMs);
     return () => window.clearTimeout(appear);
   }, [delayMs]);
 
-  // A frame after mounting, so the transition has two states to move between
-  // rather than starting at its destination.
-  useEffect(() => {
-    if (!shown) return;
-
-    const frame = window.requestAnimationFrame(() => setSettled(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, [shown]);
-
   if (!shown) return null;
 
   const mark = avatar ?? (Brand ? <Brand /> : null);
 
+  /*
+   * Rendered at full opacity, with no entrance of its own.
+   *
+   * The first version faded in from `opacity: 0` on the next animation frame,
+   * which is wrong in a way that only shows up somewhere awkward:
+   * `requestAnimationFrame` does not fire in a tab that is not painting, so a
+   * page opened in a background tab — a middle click, a restored session — got
+   * a teaser that was invisible and still focusable, and stayed that way until
+   * something forced a paint. Nothing meant to be seen should wait on a
+   * callback to become visible.
+   *
+   * A host that wants it to arrive rather than appear puts an animation on
+   * `classNames.teaser`, where the rest of its styling already lives.
+   */
   return (
-    <div
-      className={classNames.teaser}
-      style={
-        still
-          ? undefined
-          : {
-              opacity: settled ? 1 : 0,
-              transform: settled ? "none" : "translateY(6px)",
-              transition: "opacity 220ms ease-out, transform 220ms ease-out",
-            }
-      }
-    >
+    <div className={classNames.teaser}>
       {/*
         Two sibling buttons rather than one containing the other: a button
         inside a button is invalid, and browsers resolve it by dropping one —

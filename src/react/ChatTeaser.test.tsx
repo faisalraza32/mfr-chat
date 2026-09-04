@@ -69,7 +69,12 @@ describe("the launcher teaser", () => {
     expect(screen.queryByText(COPY.message)).toBeNull();
 
     await waitForTeaser();
-    expect(screen.getByText(COPY.message)).toBeInTheDocument();
+
+    // `toBeVisible`, not `toBeInTheDocument`. The first version of this
+    // component faded in on an animation frame, and a frame never arrives in a
+    // tab that is not painting — so it was in the document, focusable, and
+    // invisible. Presence is not the assertion worth making about a nudge.
+    expect(screen.getByText(COPY.message)).toBeVisible();
   });
 
   it("stays away for good once dismissed, across a reload", async () => {
