@@ -19,6 +19,16 @@
  * a plausible-looking pattern gets it wrong quietly. See links.test.ts.
  */
 
+/**
+ * An absolute URL, stopping before any sentence punctuation it ends on.
+ *
+ * The last character may not be `.,;:!?` — otherwise a URL written where it
+ * belongs, at the end of a sentence, swallows the full stop and the final
+ * query parameter arrives as `travelmode=driving.` A closing bracket is
+ * excluded outright for the same reason: prose puts links in parentheses.
+ */
+const ABSOLUTE = "https?:\\/\\/[^\\s)]*[^\\s).,;:!?]";
+
 /** Rejects anything that could widen the pattern beyond a path segment. */
 const SAFE_PREFIX = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -40,11 +50,11 @@ export function buildLinkPattern(internalPathPrefixes: string[]): RegExp {
   if (safe.length === 0) {
     // Absolute URLs only. An app with no public sections to link into is a
     // perfectly ordinary case.
-    return /(https?:\/\/[^\s)]+)/gi;
+    return new RegExp(`(${ABSOLUTE})`, "gi");
   }
 
   return new RegExp(
-    `(https?:\\/\\/[^\\s)]+|\\/(?:${safe.join("|")})[a-z0-9/-]*)`,
+    `(${ABSOLUTE}|\\/(?:${safe.join("|")})[a-z0-9/-]*)`,
     "gi"
   );
 }

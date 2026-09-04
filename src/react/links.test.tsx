@@ -124,4 +124,35 @@ describe("buildLinkPattern", () => {
       "text",
     ]);
   });
+
+  it("leaves the sentence's punctuation out of the link", () => {
+    // A URL written where it belongs — at the end of a sentence — used to
+    // swallow the full stop, so a maps link arrived as `travelmode=driving.`
+    // and the last parameter was junk.
+    const pattern = buildLinkPattern([]);
+    const url = "https://maps.example/dir?to=here&mode=driving";
+
+    for (const [text, why] of [
+      [`Directions: ${url}.`, "full stop"],
+      [`Use ${url}, then park.`, "comma"],
+      [`Lost? ${url}!`, "exclamation"],
+      [`Which one: ${url}?`, "question mark"],
+      [`See ${url}; it is quicker.`, "semicolon"],
+    ] as const) {
+      const link = splitLinkedText(text, pattern).find(
+        (segment) => segment.kind === "external",
+      );
+
+      expect(link?.text, why).toBe(url);
+    }
+  });
+
+  it("still takes a URL that is the whole message", () => {
+    const pattern = buildLinkPattern([]);
+    const url = "https://maps.example/dir?to=here";
+
+    expect(
+      splitLinkedText(url, pattern).find((s) => s.kind === "external")?.text,
+    ).toBe(url);
+  });
 });
