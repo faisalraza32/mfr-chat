@@ -61,9 +61,13 @@ export function ChatTeaser({
    * which is wrong in a way that only shows up somewhere awkward:
    * `requestAnimationFrame` does not fire in a tab that is not painting, so a
    * page opened in a background tab — a middle click, a restored session — got
-   * a teaser that was invisible and still focusable, and stayed that way until
-   * something forced a paint. Nothing meant to be seen should wait on a
-   * callback to become visible.
+   * a teaser that was invisible and still focusable until something forced a
+   * paint.
+   *
+   * In fairness that meant "until somebody looked at the tab", so nobody would
+   * ever have seen the fault. It went anyway: a component that is invisible
+   * unless a callback fires is one whose appearance you cannot reason about,
+   * and it cost an hour of chasing a contrast problem that was not there.
    *
    * A host that wants it to arrive rather than appear puts an animation on
    * `classNames.teaser`, where the rest of its styling already lives.
