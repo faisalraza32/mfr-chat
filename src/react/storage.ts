@@ -15,6 +15,8 @@ export interface ChatStorageKeys {
   /** Epoch ms of the last message sent, for the idle rules in ./session. */
   activity: string;
   open: string;
+  /** Set once somebody dismisses the launcher's teaser. Durable — see below. */
+  teaserDismissed: string;
 }
 
 export interface ChatStorage {
@@ -22,6 +24,17 @@ export interface ChatStorage {
   read(key: string): string | null;
   write(key: string, value: string): void;
   remove(key: string): void;
+  /**
+   * The same pair against `localStorage`, for the handful of things that are a
+   * *preference* rather than conversation state.
+   *
+   * "I closed your chat bubble" is the whole of that list today, and it has to
+   * outlive the tab: a teaser that comes back every time somebody opens the
+   * site in a new window has not been dismissed, it has been postponed, and it
+   * reads as a bug rather than a nudge.
+   */
+  readDurable(key: string): string | null;
+  writeDurable(key: string, value: string): void;
 }
 
 /**
@@ -38,6 +51,7 @@ export function createChatStorage(prefix: string): ChatStorage {
       messages: `${namespace}messages`,
       activity: `${namespace}activity`,
       open: `${namespace}open`,
+      teaserDismissed: `${namespace}teaser-dismissed`,
     },
 
     read(key) {
@@ -63,6 +77,24 @@ export function createChatStorage(prefix: string): ChatStorage {
         window.sessionStorage.removeItem(key);
       } catch {
         // Ignore — see read.
+      }
+    },
+
+    readDurable(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        // Private mode or blocked site data. A teaser shows again, which is
+        // the harmless way for this to fail.
+        return null;
+      }
+    },
+
+    writeDurable(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {
+        // Ignore — see readDurable.
       }
     },
   };

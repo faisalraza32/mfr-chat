@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { ChatTeaser, type ChatTeaserCopy } from "./ChatTeaser.js";
 import { useChatUI } from "./context.js";
 import { ChatIcon } from "./icons.js";
 import type { OpenChatChannel } from "./open-chat.js";
@@ -26,6 +27,14 @@ export interface ChatLauncherProps {
   /** Lets a page ask for the panel. Omit and nothing can open it but a click. */
   openChannel?: OpenChatChannel;
   icon?: ReactNode;
+  /**
+   * A nudge beside the button, a few seconds after the page settles.
+   *
+   * Omit it and there is none. Dismissing it is remembered past the tab, and a
+   * conversation that already exists suppresses it — somebody who has used the
+   * assistant does not need selling it.
+   */
+  teaser?: ChatTeaserCopy & { delayMs?: number };
 }
 
 export function ChatLauncher({
@@ -36,6 +45,7 @@ export function ChatLauncher({
   routeKey,
   openChannel,
   icon,
+  teaser,
 }: ChatLauncherProps) {
   const { classNames, fullscreenQuery } = useChatUI();
 
@@ -46,6 +56,24 @@ export function ChatLauncher({
     () => storage.read(storage.keys.open) === "1"
   );
   const launcherRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * Whether the nudge has anything left to say.
+   *
+   * Suppressed by a previous dismissal, by the panel being open, and by a
+   * conversation already existing in this tab — three separate ways of having
+   * been answered already.
+   */
+  const [teaserDone, setTeaserDone] = useState(
+    () =>
+      storage.readDurable(storage.keys.teaserDismissed) === "1" ||
+      storage.read(storage.keys.conversation) !== null,
+  );
+
+  const dismissTeaser = () => {
+    storage.writeDurable(storage.keys.teaserDismissed, "1");
+    setTeaserDone(true);
+  };
 
   const toggle = () =>
     setOpen((current) => {
@@ -113,6 +141,21 @@ export function ChatLauncher({
       >
         {icon ?? <ChatIcon />}
       </button>
+
+      {teaser && !teaserDone && !open ? (
+        <ChatTeaser
+          copy={teaser}
+          delayMs={teaser.delayMs}
+          onDismiss={dismissTeaser}
+          onOpen={() => {
+            // Taken up rather than refused, but either way it has done its job
+            // and should not return when the panel closes.
+            dismissTeaser();
+            setOpen(true);
+            storage.write(storage.keys.open, "1");
+          }}
+        />
+      ) : null}
 
       {open ? renderPanel({ onClose: close }) : null}
     </>

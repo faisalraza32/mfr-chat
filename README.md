@@ -167,6 +167,7 @@ const storage = createChatStorage("acme:chat");
 | `internalPathPrefixes` | **Security.** See below |
 | `classNames` | Defaults are shadcn's vocabulary; override the slots your design system names differently |
 | `Brand` | A component, not a node, so a theme-aware logo can call a hook |
+| `teaser` on `ChatLauncher` | A nudge beside the button a few seconds in, with a dismiss that sticks |
 | `challenge` | Omit for an authenticated app |
 
 ### The link allow-list takes prefixes, never a pattern
@@ -177,11 +178,27 @@ are rejected. Handing over a `RegExp` would move the guarantee to the caller,
 where a plausible-looking mistake is silent — a stray `.*` is an off-site
 redirect the assistant can be talked into emitting.
 
+### The launcher teaser
+
+`ChatLauncher` takes an optional `teaser` — a line of copy that appears beside
+the button a few seconds after the page settles, with a close control. Omit it
+and there is none.
+
+Dismissing it is remembered **past the tab**, and a conversation that already
+exists suppresses it: somebody who has used the assistant does not need selling
+it. A bubble that returns on the next visit has not been dismissed, it has been
+postponed, and that is the thing people mean when they say they hate chat
+widgets.
+
 ### Storage
 
 `createChatStorage(prefix)` namespaces `sessionStorage`, because two apps on one
 origin would otherwise read each other's threads. sessionStorage rather than
 local: a conversation belongs to the tab it started in.
+
+The one exception is `readDurable` / `writeDurable`, backed by `localStorage`,
+for the handful of things that are a *preference* rather than conversation
+state. The teaser dismissal is the whole of that list today.
 
 ---
 

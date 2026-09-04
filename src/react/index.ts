@@ -27,6 +27,8 @@ export { ChatMessageBubble } from "./ChatMessageBubble.js";
 export type { ChatMessageBubbleProps } from "./ChatMessageBubble.js";
 export { ChatPanel } from "./ChatPanel.js";
 export type { ChatPanelCopy, ChatPanelProps } from "./ChatPanel.js";
+export { ChatTeaser } from "./ChatTeaser.js";
+export type { ChatTeaserCopy, ChatTeaserProps } from "./ChatTeaser.js";
 export { ChatLauncher } from "./ChatLauncher.js";
 export type { ChatLauncherProps } from "./ChatLauncher.js";
 export { ChatIcon, CloseIcon, SendIcon } from "./icons.js";

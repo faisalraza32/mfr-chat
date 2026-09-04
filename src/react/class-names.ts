@@ -33,6 +33,10 @@ export interface ChatClassNames {
   bubbleLink: string;
   typingDot: string;
   launcher: string;
+  teaser: string;
+  teaserBody: string;
+  teaserText: string;
+  teaserDismiss: string;
 }
 
 export const defaultChatClassNames: ChatClassNames = {
@@ -81,6 +85,15 @@ export const defaultChatClassNames: ChatClassNames = {
   typingDot: "h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground",
   launcher:
     "fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:bg-primary/90 motion-safe:hover:scale-105",
+  // Sits directly above the launcher: 24px from the bottom plus a 56px button
+  // leaves 80px, so 88px clears it by 8. Right-aligned with it, and capped so
+  // a long line wraps into a card rather than stretching across the viewport.
+  teaser:
+    "fixed bottom-[5.5rem] right-6 z-40 flex max-w-[17rem] items-start gap-2 rounded-2xl border border-border bg-background p-3 pr-2 shadow-lg",
+  teaserBody: "flex items-start gap-2.5 text-left",
+  teaserText: "text-[13px] leading-snug text-foreground",
+  teaserDismiss:
+    "-mt-1 -mr-1 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
 };
 
 export function resolveClassNames(
