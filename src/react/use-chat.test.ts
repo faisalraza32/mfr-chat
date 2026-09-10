@@ -240,4 +240,52 @@ describe("useChat wiring", () => {
       email: "ada@example.com",
     });
   });
+
+  it("sends the headers the host supplies, read fresh each time", async () => {
+    // The case this exists for: a bearer token in an SPA. Captured once at
+    // mount it would keep sending the token the page loaded with, and start
+    // failing silently the moment it was refreshed.
+    let token = "first-token";
+
+    vi.mocked(fetch).mockResolvedValue(
+      streamResponse({ type: "delta", text: "Hi." }, { type: "done" })
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ ...options, headers: () => ({ Authorization: `Bearer ${token}` }) })
+    );
+
+    await act(async () => {
+      await result.current.send("One", "");
+    });
+
+    token = "rotated-token";
+
+    await act(async () => {
+      await result.current.send("Two", "");
+    });
+
+    const sent = vi.mocked(fetch).mock.calls.map(
+      ([, init]) => new Headers(init?.headers as HeadersInit).get("Authorization")
+    );
+
+    expect(sent).toEqual(["Bearer first-token", "Bearer rotated-token"]);
+  });
+
+  it("still sends JSON when the host supplies no headers", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      streamResponse({ type: "delta", text: "Hi." }, { type: "done" })
+    );
+
+    const { result } = renderHook(() => useChat(options));
+
+    await act(async () => {
+      await result.current.send("Hello", "");
+    });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(new Headers(init?.headers as HeadersInit).get("Content-Type")).toBe(
+      "application/json"
+    );
+  });
 });

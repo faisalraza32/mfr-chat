@@ -190,6 +190,19 @@ it. A bubble that returns on the next visit has not been dismissed, it has been
 postponed, and that is the thing people mean when they say they hate chat
 widgets.
 
+### Authenticating the request
+
+`useChat` calls `fetch`, so a cookie-authenticated app needs nothing — the
+browser attaches those itself. An app holding a bearer token passes `headers`:
+
+```ts
+useChat({ copy, storage, headers: () => ({ Authorization: `Bearer ${token()}` }) })
+```
+
+A function, not an object: the token is usually refreshed while the panel is
+open, and an object captured at mount keeps sending the one the page loaded
+with, then starts failing silently an hour in.
+
 ### Storage
 
 `createChatStorage(prefix)` namespaces `sessionStorage`, because two apps on one

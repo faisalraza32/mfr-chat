@@ -29,6 +29,18 @@ export interface UseChatOptions {
    * an app might add a workspace id.
    */
   metadata?: () => Record<string, unknown>;
+  /**
+   * Extra headers on every request, read fresh each time.
+   *
+   * A function rather than an object because the common case is a bearer token
+   * that is refreshed while the panel is open: an object captured at mount
+   * would keep sending the token the page loaded with, and start failing
+   * silently an hour in.
+   *
+   * Cookie-authenticated apps need none of this — the browser attaches those
+   * itself, and `fetch` is same-origin here.
+   */
+  headers?: () => Record<string, string>;
 }
 
 export interface UseChatResult {
@@ -55,6 +67,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
     idleChallengeMs,
     idleResetMs,
     metadata,
+    headers,
   } = options;
 
   const KEYS = storage.keys;
@@ -298,7 +311,10 @@ export function useChat(options: UseChatOptions): UseChatResult {
       try {
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(headers?.() ?? {}),
+          },
           body: JSON.stringify({
             conversationId: conversationIdRef.current,
             message: trimmed,
@@ -380,6 +396,7 @@ export function useChat(options: UseChatOptions): UseChatResult {
       expiredCopy,
       expireConversation,
       getConversationId,
+      headers,
       markActivity,
       metadata,
       readSessionStatus,
