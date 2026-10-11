@@ -100,6 +100,25 @@ captcha in front of somebody who has already signed in is asking them to prove
 it twice, so an authenticated app passes nothing and the whole challenge
 mechanism is simply not there.
 
+### Checking the reply before anybody sees it
+
+`validateReply` is the last look at a finished reply. Return null to send it as
+the model wrote it, or the text to send instead.
+
+```ts
+validateReply: (text) =>
+  text.includes(SECRET_INSTRUCTIONS) ? "I can't share my instructions." : null,
+```
+
+It costs the token-by-token stream: with a validator the reply is held until it
+is whole, checked, and then sent in one piece. That is the point. A reply that
+recites its own instructions, invents a price, or leaks a raw tool call has
+done the damage the moment it is on screen — pulling it a second later is not
+a fix. Short replies make this a second of typing dots, which is the trade.
+
+Tool events are not held back, only text, and what the store records is what
+was sent rather than what the model first wrote.
+
 ### The one rule every `ChatStore` must keep
 
 History lives in the store, never in the request body. If the browser sent the

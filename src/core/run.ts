@@ -44,6 +44,20 @@ export interface RunChatTurnOptions<Ctx> {
    */
   wrapUpNote?: string;
   messages?: Partial<Pick<ChatMessages, "toolLoopExhausted">>;
+  /**
+   * The last look at a finished reply before anybody sees it. Return null to
+   * send it as the model wrote it, or the text to send instead.
+   *
+   * Supplying this holds the reply back until the turn is complete: the
+   * visitor gets it in one piece rather than token by token. That is the
+   * price of never showing something that has to be taken back — a reply
+   * reciting its own instructions has leaked them whether or not it is pulled
+   * a second later. Leave it out and the stream behaves exactly as before.
+   *
+   * Tool events are not held back, only text: a booking button the visitor can
+   * already see is not something the reply can retract.
+   */
+  validateReply?: (text: string) => string | null;
   /** Defaults to a `console.log`. Pass a no-op to silence it. */
   logUsage?: (usage: ProviderUsage & { provider: string; model: string }) => void;
 }
@@ -128,6 +142,29 @@ export async function runChatTurn<Ctx>(
     context: toolContext,
   };
 
+  const validateReply = options.validateReply;
+  /** With a validator, nothing goes out until there is something to validate. */
+  const buffering = Boolean(validateReply);
+
+  /**
+   * The single exit: checks the reply where a validator was given, sends
+   * whatever survives, and reports that same text back so the host stores what
+   * the visitor actually saw rather than what the model first wrote.
+   */
+  const finish = (text: string): RunResult => {
+    if (!validateReply) {
+      return { text };
+    }
+
+    const finalText = validateReply(text) ?? text;
+
+    if (finalText) {
+      emit({ type: "delta", text: finalText });
+    }
+
+    return { text: finalText };
+  };
+
   let assistantText = "";
 
   for (let iteration = 0; iteration < maxToolIterations; iteration += 1) {
@@ -138,7 +175,10 @@ export async function runChatTurn<Ctx>(
       tools: toolset.definitions,
       onText: (text) => {
         assistantText += text;
-        emit({ type: "delta", text });
+
+        if (!buffering) {
+          emit({ type: "delta", text });
+        }
       },
     });
 
@@ -151,7 +191,7 @@ export async function runChatTurn<Ctx>(
     }
 
     if (turn.toolCalls.length === 0) {
-      return { text: assistantText };
+      return finish(assistantText);
     }
 
     messages.push({
@@ -180,8 +220,11 @@ export async function runChatTurn<Ctx>(
   // leaving the bubble empty.
   if (!assistantText) {
     assistantText = toolLoopExhausted;
-    emit({ type: "delta", text: assistantText });
+
+    if (!buffering) {
+      emit({ type: "delta", text: assistantText });
+    }
   }
 
-  return { text: assistantText };
+  return finish(assistantText);
 }

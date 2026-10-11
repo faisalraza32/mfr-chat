@@ -56,6 +56,23 @@ function stubFetch() {
   });
 }
 
+/** The same reply arriving in two chunks, so buffering is visible in a test. */
+const SSE_IN_TWO_PARTS = SSE.replace(
+  'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"We build mobile and web software."}}\n\n',
+  'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"We build mobile "}}\n\n' +
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"and web software."}}\n\n'
+);
+
+function stubChunkedFetch() {
+  return vi.fn(
+    async () =>
+      new Response(SSE_IN_TWO_PARTS, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      })
+  );
+}
+
 const GUARDRAILS = "You are a helpful assistant. Stay on topic.";
 const KNOWLEDGE = "COMPANY KNOWLEDGE\n\nWe build mobile and web software.";
 
@@ -229,5 +246,63 @@ describe("the wrap-up steer", () => {
     const asJson = JSON.stringify(captured.body.messages);
     expect(asJson).toContain("offer to book a call or take a message.");
     expect(asJson).not.toContain("close to its length limit");
+  });
+});
+
+describe("the reply validator", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal("fetch", stubChunkedFetch());
+  });
+
+  it("holds the reply back until it is whole, then sends it in one piece", async () => {
+    // The point of the hook: there is no moment where half a reply is on
+    // screen and the rest has not been checked yet.
+    const deltas: string[] = [];
+    const seen: string[] = [];
+
+    const result = await run({
+      emit: (event: ChatEvent) => {
+        if (event.type === "delta") deltas.push(event.text);
+      },
+      validateReply: (text) => {
+        seen.push(text);
+        return null;
+      },
+    });
+
+    expect(seen).toEqual(["We build mobile and web software."]);
+    expect(deltas).toEqual(["We build mobile and web software."]);
+    expect(result.text).toBe("We build mobile and web software.");
+  });
+
+  it("sends the replacement instead, and never the original", async () => {
+    const deltas: string[] = [];
+
+    const result = await run({
+      emit: (event: ChatEvent) => {
+        if (event.type === "delta") deltas.push(event.text);
+      },
+      validateReply: () => "I can't help with that one.",
+    });
+
+    expect(deltas).toEqual(["I can't help with that one."]);
+    expect(deltas.join("")).not.toContain("mobile and web software");
+    // What the host stores is what the visitor saw, not what the model wrote.
+    expect(result.text).toBe("I can't help with that one.");
+  });
+
+  it("streams chunk by chunk when no validator is given", async () => {
+    // The hook is opt-in: without one, nothing about the stream changes, and
+    // a reply the provider sends in two parts still arrives in two.
+    const deltas: string[] = [];
+
+    await run({
+      emit: (event: ChatEvent) => {
+        if (event.type === "delta") deltas.push(event.text);
+      },
+    });
+
+    expect(deltas).toEqual(["We build mobile ", "and web software."]);
   });
 });

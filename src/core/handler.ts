@@ -51,6 +51,14 @@ export interface ChatHandlerDeps<Ctx> {
   wrapUpNote?: string;
 
   /**
+   * Checks the finished reply before the visitor sees it, returning
+   * replacement text or null to let it through. See `validateReply` on
+   * RunChatTurnOptions: supplying it holds the reply back until it is whole,
+   * and what is stored is what was sent.
+   */
+  validateReply?: (text: string) => string | null;
+
+  /**
    * Called once per model call with what it consumed.
    *
    * A turn that calls tools makes several, so this fires several times. Meter
@@ -274,6 +282,7 @@ export async function handleChatRequest<Ctx>(
           guardrails: deps.guardrails,
           knowledge: deps.knowledge,
           wrapUpNote: deps.wrapUpNote,
+          validateReply: deps.validateReply,
           logUsage: deps.logUsage,
           toolset: deps.toolset,
           toolContext: deps.toolContext,
