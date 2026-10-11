@@ -473,6 +473,31 @@ describe("when the provider fails", () => {
     ]);
   });
 
+  it("awaits a fallback that has to be computed", async () => {
+    // Sitebuilder's case: the replacement is produced by answering again from
+    // the site's own data, with tools, which cannot be done synchronously.
+    const events = await readEvents(
+      await handleChatRequest(
+        post({ conversationId: CONVERSATION, message: "when are you open?" }),
+        deps({
+          provider: () => {
+            throw new Error("upstream exploded");
+          },
+          fallbackReply: async () => {
+            await Promise.resolve();
+
+            return "Computed from our own data.";
+          },
+        })
+      )
+    );
+
+    expect(events.some((event) => event.type === "error")).toBe(false);
+    expect(
+      events.filter((event) => event.type === "delta").map((event) => event.text)
+    ).toEqual(["Computed from our own data."]);
+  });
+
   it("falls back to the apology when the host has nothing to say", async () => {
     const events = await readEvents(
       await handleChatRequest(

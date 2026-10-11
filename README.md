@@ -110,6 +110,10 @@ validateReply: (text) =>
   text.includes(SECRET_INSTRUCTIONS) ? "I can't share my instructions." : null,
 ```
 
+It may be async, which is the point for a host whose replacement is *computed*
+rather than canned — one that answers again from its own data, running tools to
+do it. Nothing is sent until it has answered.
+
 It costs the token-by-token stream: with a validator the reply is held until it
 is whole, checked, and then sent in one piece. That is the point. A reply that
 recites its own instructions, invents a price, or leaks a raw tool call has
@@ -130,8 +134,9 @@ hours when the provider is down.
 fallbackReply: (message, failure) => answerFromOwnContent(message),
 ```
 
-Return text and it is sent and stored like an ordinary reply, so the
-conversation still reads if the next message gets through. Return null and the
+It may be async too, for the same reason. Return text and it is sent and
+stored like an ordinary reply, so the conversation still reads if the next
+message gets through. Return null and the
 apology stands. The `failure` is there to answer differently for a billing
 problem than for a timeout, if you want to.
 

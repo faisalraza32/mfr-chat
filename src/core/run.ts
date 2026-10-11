@@ -56,8 +56,14 @@ export interface RunChatTurnOptions<Ctx> {
    *
    * Tool events are not held back, only text: a booking button the visitor can
    * already see is not something the reply can retract.
+   *
+   * May be async. A host whose replacement is computed rather than canned —
+   * one that answers again from its own data, running tools to do it — needs
+   * to await something, and the alternative is that it cannot use this hook
+   * at all. The visitor is already waiting for the turn to finish, so the
+   * cost is whatever the replacement itself costs.
    */
-  validateReply?: (text: string) => string | null;
+  validateReply?: (text: string) => string | null | Promise<string | null>;
   /** Defaults to a `console.log`. Pass a no-op to silence it. */
   logUsage?: (usage: ProviderUsage & { provider: string; model: string }) => void;
 }
@@ -151,12 +157,12 @@ export async function runChatTurn<Ctx>(
    * whatever survives, and reports that same text back so the host stores what
    * the visitor actually saw rather than what the model first wrote.
    */
-  const finish = (text: string): RunResult => {
+  const finish = async (text: string): Promise<RunResult> => {
     if (!validateReply) {
       return { text };
     }
 
-    const finalText = validateReply(text) ?? text;
+    const finalText = (await validateReply(text)) ?? text;
 
     if (finalText) {
       emit({ type: "delta", text: finalText });

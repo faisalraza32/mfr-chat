@@ -60,7 +60,7 @@ export interface ChatHandlerDeps<Ctx> {
    * RunChatTurnOptions: supplying it holds the reply back until it is whole,
    * and what is stored is what was sent.
    */
-  validateReply?: (text: string) => string | null;
+  validateReply?: (text: string) => string | null | Promise<string | null>;
 
   /**
    * Answers when the model could not be reached at all — no credit, no key,
@@ -79,7 +79,7 @@ export interface ChatHandlerDeps<Ctx> {
   fallbackReply?: (
     userMessage: string,
     failure: ClassifiedFailure,
-  ) => string | null;
+  ) => string | null | Promise<string | null>;
 
   /**
    * Called once per model call with what it consumed.
@@ -341,7 +341,7 @@ export async function handleChatRequest<Ctx>(
         const failure = classifyFailure(error);
         reportFailure(failure);
 
-        const fallback = deps.fallbackReply?.(chatRequest.message, failure);
+        const fallback = await deps.fallbackReply?.(chatRequest.message, failure);
 
         if (fallback) {
           emit({ type: "delta", text: fallback });

@@ -292,6 +292,49 @@ describe("the reply validator", () => {
     expect(result.text).toBe("I can't help with that one.");
   });
 
+  it("awaits a validator that has work to do", async () => {
+    // The case this exists for: a host whose replacement is computed rather
+    // than canned, by answering again from its own data.
+    const deltas: string[] = [];
+
+    const result = await run({
+      emit: (event: ChatEvent) => {
+        if (event.type === "delta") deltas.push(event.text);
+      },
+      validateReply: async (text) => {
+        await Promise.resolve();
+
+        return text.includes("software") ? "Computed instead." : null;
+      },
+    });
+
+    expect(deltas).toEqual(["Computed instead."]);
+    expect(result.text).toBe("Computed instead.");
+  });
+
+  it("sends nothing before an async validator has answered", async () => {
+    // Awaiting it must not mean streaming the original first and correcting
+    // afterwards, which is the thing buffering exists to prevent.
+    const events: Array<{ at: number; text: string }> = [];
+    let ticks = 0;
+    const tick = () => (ticks += 1);
+
+    await run({
+      emit: (event: ChatEvent) => {
+        if (event.type === "delta") events.push({ at: ticks, text: event.text });
+      },
+      validateReply: async () => {
+        tick();
+        await Promise.resolve();
+        tick();
+
+        return "Checked.";
+      },
+    });
+
+    expect(events).toEqual([{ at: 2, text: "Checked." }]);
+  });
+
   it("streams chunk by chunk when no validator is given", async () => {
     // The hook is opt-in: without one, nothing about the stream changes, and
     // a reply the provider sends in two parts still arrives in two.
