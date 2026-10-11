@@ -249,7 +249,7 @@ export function createWorkersAiProvider(
         // block more reliably than a pair, and there is no cache breakpoint
         // here to keep them apart for.
         messages: [
-          { role: "system", content: `${request.knowledge}\n\n${request.guardrails}` },
+          { role: "system", content: systemBlock(request) },
           ...toWorkersAiMessages(request.messages),
         ],
         ...(offerTools && request.tools.length
@@ -301,6 +301,20 @@ export function createWorkersAiProvider(
       };
     },
   };
+}
+
+/**
+ * Knowledge and guardrails as one block, skipping whichever is empty.
+ *
+ * A host that keeps its prompt in one piece passes it as `guardrails` and
+ * leaves `knowledge` empty; joining unconditionally would prepend blank lines
+ * to a prompt that was tuned without them.
+ */
+function systemBlock(request: StreamTurnRequest): string {
+  return [request.knowledge, request.guardrails]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /**

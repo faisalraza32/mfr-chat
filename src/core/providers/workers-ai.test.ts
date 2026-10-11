@@ -213,6 +213,19 @@ describe("the provider in the agent loop", () => {
     );
   });
 
+  it("passes a one-piece prompt through unchanged", async () => {
+    // A host that keeps its prompt whole passes it as guardrails and leaves
+    // knowledge empty; blank lines in front of it would be a prompt change
+    // nobody asked for.
+    const ai = fakeAi({ response: "Hi." });
+
+    await run(ai, { knowledge: "", guardrails: "You are Ada." });
+
+    const [system] = ai.calls[0]!.input.messages as Array<{ content: string }>;
+
+    expect(system.content).toBe("You are Ada.");
+  });
+
   it("defaults to a model that supports tools", async () => {
     const ai = fakeAi({ response: "Hi." });
 
