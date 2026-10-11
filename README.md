@@ -119,6 +119,22 @@ a fix. Short replies make this a second of typing dots, which is the trade.
 Tool events are not held back, only text, and what the store records is what
 was sent rather than what the model first wrote.
 
+### Answering when the model cannot be reached
+
+`fallbackReply` is the other half of that. When the provider is out of credit,
+unreachable, or misconfigured, the core apologises — but a host with content of
+its own can usually do better, because the opening hours are still the opening
+hours when the provider is down.
+
+```ts
+fallbackReply: (message, failure) => answerFromOwnContent(message),
+```
+
+Return text and it is sent and stored like an ordinary reply, so the
+conversation still reads if the next message gets through. Return null and the
+apology stands. The `failure` is there to answer differently for a billing
+problem than for a timeout, if you want to.
+
 ### The one rule every `ChatStore` must keep
 
 History lives in the store, never in the request body. If the browser sent the

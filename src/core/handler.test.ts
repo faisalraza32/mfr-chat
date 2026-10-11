@@ -402,6 +402,93 @@ describe("when the provider fails", () => {
     );
   });
 
+  it("sends the host's own fallback instead of the apology", async () => {
+    // The hours are still the hours when the provider is down: a host with
+    // content of its own can answer better than "something went wrong".
+    const events = await readEvents(
+      await handleChatRequest(
+        post({ conversationId: CONVERSATION, message: "when are you open?" }),
+        deps({
+          provider: () => {
+            throw new Error("upstream exploded");
+          },
+          fallbackReply: (message) =>
+            message.includes("open") ? "We're open 9 to 5, Monday to Friday." : null,
+        })
+      )
+    );
+
+    expect(events.some((event) => event.type === "error")).toBe(false);
+    expect(
+      events.filter((event) => event.type === "delta").map((event) => event.text)
+    ).toEqual(["We're open 9 to 5, Monday to Friday."]);
+    // Ends like any other turn, so the browser needs no new case.
+    expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("tells the host what went wrong, so it can answer accordingly", async () => {
+    const seen: unknown[] = [];
+
+    await readEvents(
+      await handleChatRequest(
+        post({ conversationId: CONVERSATION, message: "Hi" }),
+        deps({
+          provider: () => {
+            throw Object.assign(new Error("Your credit balance is too low"), {
+              status: 400,
+            });
+          },
+          fallbackReply: (_message, failure) => (seen.push(failure), "Something useful."),
+        })
+      )
+    );
+
+    expect(seen).toEqual([
+      expect.objectContaining({ kind: "billing", urgent: true }),
+    ]);
+  });
+
+  it("stores a fallback like any other reply, so the next turn still reads", async () => {
+    const store = fakeStore();
+    const background: Array<Promise<unknown>> = [];
+
+    await readEvents(
+      await handleChatRequest(
+        post({ conversationId: CONVERSATION, message: "Hi" }),
+        deps({
+          store,
+          runInBackground: (work) => void background.push(work),
+          provider: () => {
+            throw new Error("upstream exploded");
+          },
+          fallbackReply: () => "Here is what I can tell you.",
+        })
+      )
+    );
+
+    await Promise.all(background);
+
+    expect(store.turns).toEqual([
+      { user: "Hi", assistant: "Here is what I can tell you." },
+    ]);
+  });
+
+  it("falls back to the apology when the host has nothing to say", async () => {
+    const events = await readEvents(
+      await handleChatRequest(
+        post({ conversationId: CONVERSATION, message: "Hi" }),
+        deps({
+          provider: () => {
+            throw new Error("upstream exploded");
+          },
+          fallbackReply: () => null,
+        })
+      )
+    );
+
+    expect(events.some((event) => event.type === "error")).toBe(true);
+  });
+
   it("does not persist a turn that produced no reply", async () => {
     const store = fakeStore();
     const background: Array<Promise<unknown>> = [];

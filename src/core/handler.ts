@@ -14,7 +14,11 @@ import {
   type ChatMessages,
   type SessionOptions,
 } from "./config.js";
-import { classifyFailure, visitorMessage } from "./failures.js";
+import {
+  classifyFailure,
+  visitorMessage,
+  type ClassifiedFailure,
+} from "./failures.js";
 import type {
   BackgroundTask,
   ChatStore,
@@ -57,6 +61,25 @@ export interface ChatHandlerDeps<Ctx> {
    * and what is stored is what was sent.
    */
   validateReply?: (text: string) => string | null;
+
+  /**
+   * Answers when the model could not be reached at all — no credit, no key,
+   * the provider having an outage.
+   *
+   * Return text to send in place of the apology, or null to let the apology
+   * stand. A host with structured content of its own can usually do better
+   * than "something went wrong": the opening hours are still the opening
+   * hours when the provider is down.
+   *
+   * The reply is sent as an ordinary one, and stored as one, so the
+   * conversation stays coherent if the next message gets through. Without
+   * `validateReply` some text may already have streamed before the failure,
+   * and this is appended to it.
+   */
+  fallbackReply?: (
+    userMessage: string,
+    failure: ClassifiedFailure,
+  ) => string | null;
 
   /**
    * Called once per model call with what it consumed.
@@ -317,7 +340,27 @@ export async function handleChatRequest<Ctx>(
         console.error("Chat turn failed:", error);
         const failure = classifyFailure(error);
         reportFailure(failure);
-        emit({ type: "error", error: visitorMessage(failure, messages) });
+
+        const fallback = deps.fallbackReply?.(chatRequest.message, failure);
+
+        if (fallback) {
+          emit({ type: "delta", text: fallback });
+          emit({ type: "done" });
+
+          runInBackground(
+            deps.store
+              .recordTurn(
+                chatRequest.conversationId,
+                chatRequest.message,
+                fallback,
+              )
+              .catch((storeError) => {
+                console.error("Failed to persist chat turn:", storeError);
+              }),
+          );
+        } else {
+          emit({ type: "error", error: visitorMessage(failure, messages) });
+        }
       } finally {
         closed = true;
         controller.close();
