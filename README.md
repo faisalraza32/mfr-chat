@@ -165,6 +165,29 @@ createProvider({ id: "anthropic", apiKey, model: "claude-opus-5", workspaceId })
 SDK attached**, so a privacy page can name its processor without pulling two
 model SDKs into the browser bundle. Use it, not the barrel, in client code.
 
+**Cloudflare Workers AI** is the exception to "switching is a config change":
+it is a runtime binding, not an API key, so it has a constructor of its own and
+`createProvider` refuses it by name.
+
+```ts
+createWorkersAiProvider({ ai: env.AI })   // inside a Worker
+```
+
+`PROVIDER_KEY_NAMES["workers-ai"]` is therefore `null` — check
+`providerNeedsKey(id)` before looking a key up in the environment.
+
+It is an order of magnitude cheaper than the hosted APIs, and the open models
+on it are correspondingly less disciplined: the adapter recovers tool calls the
+model writes out as prose, and withholds the tool list once a result is in the
+conversation, because Llama 3.3 otherwise asks for the same tool for ever. Both
+were confirmed against the live API. There is also no token stream through a
+binding, so the reply arrives whole — a page that renders deltas simply gets
+one.
+
+A sensible split for a multi-tenant product: Workers AI on a free tier, a
+hosted model on a paid one. On a site where the assistant is the first
+impression, pay for the better model.
+
 ### Prompt caching is the main cost lever
 
 `guardrails` and `knowledge` are separate because the cache breakpoint goes

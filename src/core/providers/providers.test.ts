@@ -8,6 +8,7 @@ import {
   PROVIDER_KEY_NAMES,
   PROVIDER_LABELS,
   PROVIDER_REGIONS,
+  providerNeedsKey,
   resolveProviderId,
 } from "./index.js";
 
@@ -100,6 +101,16 @@ describe("assertProviderMatchesDeclared", () => {
   });
 });
 
+describe("building a provider", () => {
+  it("sends Workers AI to its own constructor rather than asking for a key", () => {
+    // "OPENAI_API_KEY is not configured" would be a confusing way to say
+    // "this one takes a binding".
+    expect(() =>
+      createProvider({ id: "workers-ai", apiKey: "" })
+    ).toThrowError(/createWorkersAiProvider/);
+  });
+});
+
 describe("provider metadata", () => {
   it("labels every provider, for alerts and any published policy", () => {
     expect(PROVIDER_LABELS).toEqual({
@@ -107,13 +118,22 @@ describe("provider metadata", () => {
       openai: "OpenAI",
       xai: "xAI",
       deepseek: "DeepSeek",
+      "workers-ai": "Cloudflare Workers AI",
     });
   });
 
-  it("names a key and a region for every provider", () => {
+  it("names a region for every provider, and a key for every keyed one", () => {
     for (const id of PROVIDER_IDS) {
-      expect(PROVIDER_KEY_NAMES[id]).toBeTruthy();
       expect(PROVIDER_REGIONS[id]).toBeTruthy();
+
+      // A region is required of all of them: it is what a privacy policy
+      // discloses. A key name is not — Workers AI is a binding, and says so
+      // with null rather than an empty string nobody would notice.
+      if (providerNeedsKey(id)) {
+        expect(PROVIDER_KEY_NAMES[id]).toBeTruthy();
+      } else {
+        expect(PROVIDER_KEY_NAMES[id]).toBeNull();
+      }
     }
 
     // Not the United States, unlike every other provider — a policy has to say

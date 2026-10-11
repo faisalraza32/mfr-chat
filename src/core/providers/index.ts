@@ -21,6 +21,15 @@ export {
   DEEPSEEK_DEFAULT_MODEL,
 } from "./openai.js";
 
+export {
+  createWorkersAiProvider,
+  parseWorkersAiResult,
+  recoverTextToolCalls,
+  shouldOfferTools,
+  WORKERS_AI_DEFAULT_MODEL,
+} from "./workers-ai.js";
+export type { WorkersAiBinding, WorkersAiOptions } from "./workers-ai.js";
+
 export * from "./metadata.js";
 
 /**
@@ -43,6 +52,14 @@ const OPENAI_COMPATIBLE: Partial<
 };
 
 export function createProvider(config: ProviderConfig): ChatProvider {
+  // Workers AI takes a binding, which cannot travel in a config object of
+  // strings. Saying so beats "OPENAI_API_KEY is not configured".
+  if (config.id === "workers-ai") {
+    throw new Error(
+      "Workers AI is built from its binding: call createWorkersAiProvider({ ai }) instead of createProvider()."
+    );
+  }
+
   if (!config.apiKey?.trim()) {
     throw new Error(`${PROVIDER_KEY_NAMES[config.id]} is not configured.`);
   }

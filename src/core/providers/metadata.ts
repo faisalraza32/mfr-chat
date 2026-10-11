@@ -16,6 +16,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "openai",
   "xai",
   "deepseek",
+  "workers-ai",
 ];
 
 export function isProviderId(value: unknown): value is ProviderId {
@@ -33,12 +34,21 @@ export function isProviderId(value: unknown): value is ProviderId {
  * "which secret is missing?" message and its operator alerts can name the same
  * variable the docs do, without each host inventing its own spelling.
  */
-export const PROVIDER_KEY_NAMES: Record<ProviderId, string> = {
+export const PROVIDER_KEY_NAMES: Record<ProviderId, string | null> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   xai: "XAI_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
+  // Workers AI is a binding handed to the Worker, not a key in the
+  // environment. Null rather than an empty string, so a host that forgets to
+  // handle it fails to compile instead of looking up `env[""]`.
+  "workers-ai": null,
 };
+
+/** True when this provider is configured with an API key at all. */
+export function providerNeedsKey(id: ProviderId): boolean {
+  return PROVIDER_KEY_NAMES[id] !== null;
+}
 
 /**
  * Display names, for operator alerts and for any published privacy policy that
@@ -49,6 +59,7 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: "OpenAI",
   xai: "xAI",
   deepseek: "DeepSeek",
+  "workers-ai": "Cloudflare Workers AI",
 };
 
 /** Where the provider processes requests, for a cross-border disclosure. */
@@ -60,6 +71,10 @@ export const PROVIDER_REGIONS: Record<ProviderId, string> = {
   // makes a policy disclose a transfer outside North America, which some
   // clients' data-residency terms do not allow.
   deepseek: "China",
+  // Inference runs on Cloudflare's own network, which for a Worker means the
+  // data centre nearest the visitor. A policy naming a single country would
+  // be wrong.
+  "workers-ai": "Cloudflare's global network",
 };
 
 /**

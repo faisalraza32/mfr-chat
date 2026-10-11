@@ -6,7 +6,13 @@
  * directory. Each adapter maps these to its own wire format.
  */
 
-export type ProviderId = "anthropic" | "openai" | "xai" | "deepseek";
+export type ProviderId =
+  | "anthropic"
+  | "openai"
+  | "xai"
+  | "deepseek"
+  /** A Cloudflare runtime binding rather than an API key — see workers-ai.ts. */
+  | "workers-ai";
 
 export interface ProviderToolCall {
   id: string;
